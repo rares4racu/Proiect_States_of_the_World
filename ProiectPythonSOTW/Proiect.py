@@ -248,6 +248,19 @@ def check_db():
         print(row)
     conn.close()
 
+def get_top_10(field):
+    conn = sqlite3.connect("countries.db")
+    cursor = conn.cursor()
+    cursor.execute(f"""
+    SELECT name, {field} FROM countries
+    WHERE {field} IS NOT NULL
+    ORDER BY {field} DESC
+    LIMIT 10;
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"name": name, field: value} for name, value in rows]
+
 
 def scrape(country, soup_borders, conn):
     try:

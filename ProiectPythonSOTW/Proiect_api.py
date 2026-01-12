@@ -6,7 +6,7 @@ from Proiect import get_top_10
 import sqlite3
 
 # Pentru rulare trebuie să vă aflați în directorul proiectului
-# și să rulați următoarea comandă (asigurați vă că aveți instalate toate librăriile necesare, uitați vă in requirements_proiect): uvicorn Proiect_api:app --reload
+# și să rulați următoarea comandă (asigurați vă că aveți instalate toate librăriile necesare): uvicorn Proiect_api:app --reload
 app = FastAPI(title="Proiect API")
 
 @app.exception_handler(404)

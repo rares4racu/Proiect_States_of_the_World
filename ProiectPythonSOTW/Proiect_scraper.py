@@ -3,12 +3,14 @@ from bs4 import BeautifulSoup
 import re
 from urllib.parse import quote
 
+
 # Funcție pentru a scoate referințele din text.
 def remove_ref(text):
     if not text:
         return None
     text = re.sub(r"\[[^]]*]", "", text).strip()
     return text
+
 
 # Funcție pentru a obține informațiile din câmpul "nume" din infobox-ul "ib".
 def get_field(infobox, name):
@@ -26,6 +28,7 @@ def get_field(infobox, name):
                 return remove_ref(td.get_text(" ").strip())
     return None
 
+
 # Funcție pentru a obține lista de țări.
 def get_countries(soup_borders):
     table = soup_borders.find("table", class_="wikitable sortable")
@@ -40,6 +43,7 @@ def get_countries(soup_borders):
         name = country_a.get_text(strip=True)
         countries.append(name)
     return countries
+
 
 # Funcție pentru a scoate din "text" doar capitala.
 def remove_unwanted_capital(text):
@@ -61,6 +65,7 @@ def remove_unwanted_capital(text):
             continue
         final_text.append(c)
     return " ".join(final_text)
+
 
 # Funcție pentru a obține populația din infobox.
 def get_population(infobox):
@@ -107,6 +112,7 @@ def get_population(infobox):
             return max(valid_numbers)
     return None
 
+
 # Funcție pentru a obține densitatea din infobox.
 def get_density(infobox):
     density_raw = get_field(infobox, ["density"])
@@ -116,14 +122,16 @@ def get_density(infobox):
     match = re.search(r"\d+(\.\d+)?", density_raw)
     return float(match.group()) if match else None
 
+
 # Funcție pentru a obține aria din infobox.
 def get_area(infobox):
-    area_raw = get_field(infobox, ["total"])
+    area_raw = get_field(infobox, ["total","incl. transnistria"])
     if not area_raw:
         return None
     area_raw = area_raw.replace(",", "")
     match = re.search(r"\d+(\.\d+)?", area_raw)
     return float(match.group()) if match else None
+
 
 # Funcție pentru a scoate din "text" doar limba.
 def remove_unwanted_language(text):
@@ -141,12 +149,14 @@ def remove_unwanted_language(text):
     text = re.sub(r", plusny other languages so recognized by law", "", text)
     return text.strip()
 
+
 # Funcție pentru a transforma ore de forma "hh:mm" în "h.m".
 def convert_timezone(x):
     if ":" in x:
         hour, minute = x.split(":")
         return int(hour) + int(minute) / 60
     return float(x)
+
 
 # Funcție pentru a scoate din "text" doar fusul orar.
 def remove_unwanted_timezone(text):
@@ -213,6 +223,7 @@ def remove_unwanted_timezone(text):
             result.append(c)
     return ', '.join(result) if result else None
 
+
 # Funcție pentru a obține forma de guvern din infobox.
 def get_government(infobox):
     for row in infobox.find_all("tr"):
@@ -229,6 +240,7 @@ def get_government(infobox):
                 return remove_ref(td.get_text(" ").strip())
     return None
 
+
 # Funcție pentru a obține din "text" doar forma de guvern.
 def remove_unwanted_government(text):
     if not text:
@@ -240,6 +252,7 @@ def remove_unwanted_government(text):
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r" \)", "", text)
     return text.strip()
+
 
 # Funcție pentru a transforma numele țării.
 # Folosită în get_neighbours pentru a asigura că luăm vecinii țării corespunzătoare.
@@ -291,6 +304,7 @@ def get_neighbours(country_name, soup_borders):
 
         return ", ".join(neighbours) if neighbours else None
     return None
+
 
 # Funcția care introduce informațiile necesare obținute de pe wikipedia și le introduce in baza de date.
 def scrape(country, soup_borders, conn):

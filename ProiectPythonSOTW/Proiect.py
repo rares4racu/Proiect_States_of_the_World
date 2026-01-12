@@ -1,6 +1,7 @@
 from Proiect_db import *
 from Proiect_scraper import *
 
+
 # Funcția principala pentru scraper.
 def main():
     conn = init_db()

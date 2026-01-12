@@ -3,16 +3,16 @@ from bs4 import BeautifulSoup
 import re
 from urllib.parse import quote
 
-
-def clean_text(text):
+# Funcție pentru a scoate referințele din text.
+def remove_ref(text):
     if not text:
         return None
-    text = re.sub(r"\[[^\]]*\]", "", text).strip()
+    text = re.sub(r"\[[^]]*]", "", text).strip()
     return text
 
-
-def get_field(ib, name):
-    for row in ib.find_all("tr"):
+# Funcție pentru a obține informațiile din câmpul "nume" din infobox-ul "ib".
+def get_field(infobox, name):
+    for row in infobox.find_all("tr"):
         th = row.find("th")
         td = row.find("td")
         if th and td:
@@ -20,29 +20,28 @@ def get_field(ib, name):
             if any(h in header for h in name):
                 l = td.find_all("li")
                 if l:
-                    return clean_text(", ".join(li.get_text(" ", strip=True) for li in l))
+                    return remove_ref(", ".join(li.get_text(" ", strip=True) for li in l))
                 for c in td.find_all("span", class_="geo"):
                     c.decompose()
-                return clean_text(td.get_text(" ").strip())
+                return remove_ref(td.get_text(" ").strip())
     return None
 
+# Funcție pentru a obține lista de țări.
+def get_countries(soup_borders):
+    table = soup_borders.find("table", class_="wikitable sortable")
+    countries = []
+    for row in table.find_all("tr"):
+        tds = row.find_all("td")
+        if len(tds) < 6:
+            continue
+        country_a = tds[0].find("a")
+        if not country_a:
+            continue
+        name = country_a.get_text(strip=True)
+        countries.append(name)
+    return countries
 
-def get_government(ib, name):
-    for row in ib.find_all("tr"):
-        th = row.find("th")
-        td = row.find("td")
-        if th and td:
-            header = th.get_text(" ").strip().lower()
-            if re.match(r"^\bgovernment\b$", header):
-                l = td.find_all("li")
-                if l:
-                    return clean_text(", ".join(li.get_text(" ", strip=True) for li in l))
-                for c in td.find_all("span", class_="geo"):
-                    c.decompose()
-                return clean_text(td.get_text(" ").strip())
-    return None
-
-
+# Funcție pentru a scoate din "text" doar capitala.
 def remove_unwanted_capital(text):
     if not text:
         return None
@@ -63,177 +62,7 @@ def remove_unwanted_capital(text):
         final_text.append(c)
     return " ".join(final_text)
 
-
-def remove_unwanted_language(text):
-    if not text:
-        return None
-    if text.lower() in ("none", "null", "n/a", ""):
-        return None
-    text = re.sub(r"\([^)]*\)", "", text)
-    text = re.sub(r"[\xa0\u200b\u2060\ufeff]", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    text = re.sub(r"\b\d+(\.\d+)?%\b|\b\d+(\.\d+)?\b", "", text)
-    text = re.sub(r" %", "", text)
-    text = re.sub(r" • ", ", ", text)
-    text = re.sub(r" a", "", text)
-    text = re.sub(r", plusny other languages so recognized by law", "", text)
-    return text.strip()
-
-
-def remove_unwanted_others(text):
-    if not text:
-        return None
-    if text.lower() in ("none", "null", "n/a", ""):
-        return None
-    text = re.sub(r"\([^)]*\)", "", text)
-    text = re.sub(r"[\xa0\u200b\u2060\ufeff]", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    text = re.sub(r" \)", "", text)
-    return text.strip()
-
-
-
-def remove_unwanted_timezone(text):
-    if not text:
-        return None
-    text = text.strip()
-    if text.lower() in ("none", "null", "n/a", ""):
-        return None
-    text = re.sub(r"\([^)]*\)", "", text)
-    text = re.sub(r"[\xa0\u200b\u2060\ufeff]", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    text = re.sub(r" Lunar Hijri calendar","",text)
-    text = re.sub(r"–","-",text)
-    text = re.sub(r"–","-",text)
-    text = re.sub(r"- ", "-",text)
-    text = re.sub(r"\+ ", "+",text)
-    text = re.sub(r"±", "+", text)
-    text = re.sub(r" / ",", ",text)
-    text = re.sub(r"/", ", ", text)
-    text = re.sub(r" and ", ", ", text)
-    text = re.sub(r" \)", "", text)
-    text = text.replace("UTC", "").replace(";", ",")
-    text = text.replace("−", "-")
-
-    parts = []
-    for part in text.split(","):
-        part = part.strip()
-        if "to" in part:
-            start, end = part.split("to")
-            start = start.strip()
-            end = end.strip()
-            parts.append(start)
-            parts.append(end)
-        else:
-            if part:
-                parts.append(part)
-
-    cleaned_offsets = []
-    for o in parts:
-        if ":" in o:
-            h, m = o.split(":")
-            offset = int(h) + int(m)/60
-        else:
-            offset = float(o)
-        if offset >= 0 and not str(offset).startswith('+'):
-            offset = f"+{offset}".rstrip('0').rstrip('.')
-        else:
-            offset = f"{offset}".rstrip('0').rstrip('.')
-        cleaned_offsets.append(f"UTC {offset}")
-
-    seen = set()
-    result = []
-    for c in cleaned_offsets:
-        c = re.sub(r" \+","+",c)
-        c = re.sub(r" -","-",c)
-        if c not in seen:
-            seen.add(c)
-            result.append(c)
-    return ', '.join(result) if result else "UTC+0"
-
-
-def get_density(infobox):
-    density_raw = get_field(infobox, ["density"])
-    if not density_raw:
-        return None
-    density_raw = density_raw.replace(",", "")
-    match = re.search(r"\d+(\.\d+)?", density_raw)
-    return float(match.group()) if match else None
-
-
-def get_area(infobox):
-    area_raw = get_field(infobox, ["total"])
-    if not area_raw:
-        return None
-    area_raw = area_raw.replace(",", "")
-    match = re.search(r"\d+(\.\d+)?", area_raw)
-    return float(match.group()) if match else None
-
-
-def normalize_country_name(name):
-    name = name.lower()
-    name = re.sub(r"\(.*?\)", "", name)
-    name = name.replace("people's republic of", "")
-    name = name.replace("republic of", "")
-    name = name.replace("kingdom of", "")
-    name = name.replace("state of", "")
-    return name.strip()
-
-
-def get_countries(soup_borders):
-    table = soup_borders.find("table", class_="wikitable sortable")
-    countries = []
-    for row in table.find_all("tr"):
-        tds = row.find_all("td")
-        if len(tds) < 6:
-            continue
-        country_a = tds[0].find("a")
-        if not country_a:
-            continue
-        name = country_a.get_text(strip=True)
-        countries.append(name)
-    return countries
-
-
-def get_neighbours(country_name, soup_borders):
-    table = soup_borders.find("table", class_="wikitable sortable")
-    for row in table.find_all("tr"):
-        tds = row.find_all("td")
-        if len(tds) < 6:
-            continue
-        country_a = tds[0].find("a")
-        if not country_a:
-            continue
-        name = country_a.get_text(strip=True)
-        if normalize_country_name(name) != normalize_country_name(country_name):
-            continue
-        neighbours_td = tds[5]
-        neighbours = []
-        for a in neighbours_td.find_all("a"):
-            text = clean_text(a.get_text(strip=True))
-            if not text:
-                continue
-            if "border" in text.lower():
-                continue
-            neighbours.append(text)
-
-        if "Dahagram-Angarpota" in neighbours:
-            neighbours.remove("Dahagram-Angarpota")
-        if country_name == "Canada" and "Denmark" in neighbours:
-            neighbours.remove("Denmark")
-        if country_name == "India" and "Ram Setu" in neighbours:
-            neighbours.remove("Ram Setu")
-        if "Gaza Strip" in neighbours:
-            neighbours.remove("Gaza Strip")
-        if "West Bank" in neighbours:
-            neighbours.remove("West Bank")
-        if "state of Palestine" in neighbours:
-            neighbours.remove("state of Palestine")
-
-        return ", ".join(neighbours) if neighbours else None
-    return None
-
-
+# Funcție pentru a obține populația din infobox.
 def get_population(infobox):
     rows = infobox.find_all("tr")
     for i, row in enumerate(rows):
@@ -248,9 +77,9 @@ def get_population(infobox):
             td = rows[i + 1].find("td")
         if not td:
             continue
-        text = clean_text(td.get_text(" ", strip=True)).lower()
+        text = remove_ref(td.get_text(" ", strip=True)).lower()
         text = re.sub(r"\b\d+(st|nd|rd|th)\b", "", text)
-        match = re.search(r"(\d+(?:[\.,]\d+)?)\s*(billion|million|m|b)", text, re.IGNORECASE)
+        match = re.search(r"(\d+(?:[.,]\d+)?)\s*(billion|million|m|b)", text, re.IGNORECASE)
         if match:
             value = float(match.group(1).replace(",", "."))
             unit = match.group(2).lower()
@@ -278,7 +107,192 @@ def get_population(infobox):
             return max(valid_numbers)
     return None
 
+# Funcție pentru a obține densitatea din infobox.
+def get_density(infobox):
+    density_raw = get_field(infobox, ["density"])
+    if not density_raw:
+        return None
+    density_raw = density_raw.replace(",", "")
+    match = re.search(r"\d+(\.\d+)?", density_raw)
+    return float(match.group()) if match else None
 
+# Funcție pentru a obține aria din infobox.
+def get_area(infobox):
+    area_raw = get_field(infobox, ["total"])
+    if not area_raw:
+        return None
+    area_raw = area_raw.replace(",", "")
+    match = re.search(r"\d+(\.\d+)?", area_raw)
+    return float(match.group()) if match else None
+
+# Funcție pentru a scoate din "text" doar limba.
+def remove_unwanted_language(text):
+    if not text:
+        return None
+    if text.lower() in ("none", "null", "n/a", ""):
+        return None
+    text = re.sub(r"\([^)]*\)", "", text)
+    text = re.sub(r"[\xa0\u200b\u2060\ufeff]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"\b\d+(\.\d+)?%\b|\b\d+(\.\d+)?\b", "", text)
+    text = re.sub(r" %", "", text)
+    text = re.sub(r" • ", ", ", text)
+    text = re.sub(r" a", "", text)
+    text = re.sub(r", plusny other languages so recognized by law", "", text)
+    return text.strip()
+
+# Funcție pentru a transforma ore de forma "hh:mm" în "h.m".
+def convert_timezone(x):
+    if ":" in x:
+        hour, minute = x.split(":")
+        return int(hour) + int(minute) / 60
+    return float(x)
+
+# Funcție pentru a scoate din "text" doar fusul orar.
+def remove_unwanted_timezone(text):
+    if not text:
+        return None
+    text = text.strip()
+    if text == "UTC":
+        return "UTC+0"
+    if text.lower() in ("none", "null", "n/a", ""):
+        return None
+    text = re.sub(r"\([^)]*\)", "", text)
+    text = re.sub(r"[\xa0\u200b\u2060\ufeff]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r" Lunar Hijri calendar", "", text)
+    text = re.sub(r"–", "-", text)
+    text = re.sub(r"–", "-", text)
+    text = re.sub(r"- ", "-", text)
+    text = re.sub(r"\+ ", "+", text)
+    text = re.sub(r"±", "+", text)
+    text = re.sub(r" / ", ", ", text)
+    text = re.sub(r"/", ", ", text)
+    text = re.sub(r" and ", ", ", text)
+    text = re.sub(r" \)", "", text)
+    text = text.replace("UTC", "").replace(";", ",")
+    text = text.replace("−", "-")
+
+    parts = []
+    for part in text.split(","):
+        part = part.strip()
+        if "to" in part:
+            start, end = part.split("to")
+            start = start.strip()
+            end = end.strip()
+            start_nou = convert_timezone(start)
+            end_nou = convert_timezone(end)
+            if start_nou > end_nou:
+                copy = start_nou
+                start_nou = end_nou
+                end_nou = copy
+            current = start_nou
+            while current <= end_nou:
+                parts.append(str(current))
+                current = current + 1
+        else:
+            if part:
+                parts.append(part)
+
+    cleaned = []
+    for p in parts:
+        converted_p = convert_timezone(p)
+        if converted_p >= 0 and not str(converted_p).startswith('+'):
+            converted_p = f"+{converted_p}".rstrip('0').rstrip('.')
+        else:
+            converted_p = f"{converted_p}".rstrip('0').rstrip('.')
+        cleaned.append(f"UTC {converted_p}")
+
+    seen = set()
+    result = []
+    for c in cleaned:
+        c = re.sub(r" \+", "+", c)
+        c = re.sub(r" -", "-", c)
+        if c not in seen:
+            seen.add(c)
+            result.append(c)
+    return ', '.join(result) if result else None
+
+# Funcție pentru a obține forma de guvern din infobox.
+def get_government(infobox):
+    for row in infobox.find_all("tr"):
+        th = row.find("th")
+        td = row.find("td")
+        if th and td:
+            header = th.get_text(" ").strip().lower()
+            if re.match(r"^\bgovernment\b$", header):
+                l = td.find_all("li")
+                if l:
+                    return remove_ref(", ".join(li.get_text(" ", strip=True) for li in l))
+                for c in td.find_all("span", class_="geo"):
+                    c.decompose()
+                return remove_ref(td.get_text(" ").strip())
+    return None
+
+# Funcție pentru a obține din "text" doar forma de guvern.
+def remove_unwanted_government(text):
+    if not text:
+        return None
+    if text.lower() in ("none", "null", "n/a", ""):
+        return None
+    text = re.sub(r"\([^)]*\)", "", text)
+    text = re.sub(r"[\xa0\u200b\u2060\ufeff]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r" \)", "", text)
+    return text.strip()
+
+# Funcție pentru a transforma numele țării.
+# Folosită în get_neighbours pentru a asigura că luăm vecinii țării corespunzătoare.
+def normalize_country_name(name):
+    name = name.lower()
+    name = re.sub(r"\(.*?\)", "", name)
+    name = name.replace("people's republic of", "")
+    name = name.replace("republic of", "")
+    name = name.replace("kingdom of", "")
+    name = name.replace("state of", "")
+    return name.strip()
+
+
+# Funcție pentru a a obține vecini unei țări.
+def get_neighbours(country_name, soup_borders):
+    table = soup_borders.find("table", class_="wikitable sortable")
+    for row in table.find_all("tr"):
+        tds = row.find_all("td")
+        if len(tds) < 6:
+            continue
+        country_a = tds[0].find("a")
+        if not country_a:
+            continue
+        name = country_a.get_text(strip=True)
+        if normalize_country_name(name) != normalize_country_name(country_name):
+            continue
+        neighbours_td = tds[5]
+        neighbours = []
+        for a in neighbours_td.find_all("a"):
+            text = remove_ref(a.get_text(strip=True))
+            if not text:
+                continue
+            if "border" in text.lower():
+                continue
+            neighbours.append(text)
+
+        if "Dahagram-Angarpota" in neighbours:
+            neighbours.remove("Dahagram-Angarpota")
+        if country_name == "Canada" and "Denmark" in neighbours:
+            neighbours.remove("Denmark")
+        if country_name == "India" and "Ram Setu" in neighbours:
+            neighbours.remove("Ram Setu")
+        if "Gaza Strip" in neighbours:
+            neighbours.remove("Gaza Strip")
+        if "West Bank" in neighbours:
+            neighbours.remove("West Bank")
+        if "state of Palestine" in neighbours:
+            neighbours.remove("state of Palestine")
+
+        return ", ".join(neighbours) if neighbours else None
+    return None
+
+# Funcția care introduce informațiile necesare obținute de pe wikipedia și le introduce in baza de date.
 def scrape(country, soup_borders, conn):
     try:
         url = "https://en.wikipedia.org/wiki/" + quote(country)
@@ -314,7 +328,7 @@ def scrape(country, soup_borders, conn):
             get_area(infobox_country),
             language,
             remove_unwanted_timezone(get_field(infobox_country, ["time zone"])),
-            remove_unwanted_others(get_government(infobox_country, ["government"])),
+            remove_unwanted_government(get_government(infobox_country)),
             neighbours
         )
 

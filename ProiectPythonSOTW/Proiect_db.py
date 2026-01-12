@@ -1,13 +1,14 @@
 import sqlite3
 
+# Funcție pentru crearea bazei de date.
 def init_db():
     conn = sqlite3.connect("countries.db")
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS countries (
-            name TEXT PRIMARY KEY,
+            name TEXT PRIMARY KEY NOT NULL,
             capital TEXT,
-            population INTEGER,
+            population INTEGER NOT NULL,
             density REAL,
             area REAL,
             language TEXT,
@@ -19,7 +20,7 @@ def init_db():
     conn.commit()
     return conn
 
-
+# Funcție pentru a obține toate informațiile din baza de date.
 def check_db():
     conn = sqlite3.connect("countries.db")
     cursor = conn.cursor()
@@ -29,6 +30,7 @@ def check_db():
         print(row)
     conn.close()
 
+# Funcție pentru a șterge toate informațiile din baza de date.
 def delete_db():
     conn = sqlite3.connect("countries.db")
     cursor = conn.cursor()
@@ -38,7 +40,7 @@ def delete_db():
     conn.commit()
     conn.close()
 
-
+# Funcție pentru a obține top 10 dintr-o anumită categorie (populație sau densitate).
 def get_top_10(field):
     conn = sqlite3.connect("countries.db")
     cursor = conn.cursor()

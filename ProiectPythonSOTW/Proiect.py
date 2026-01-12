@@ -1,7 +1,7 @@
 from Proiect_db import *
 from Proiect_scraper import *
 
-
+# Funcția principala pentru scraper.
 def main():
     conn = init_db()
     url_borders = "https://en.wikipedia.org/wiki/List_of_countries_and_territories_by_number_of_land_borders"

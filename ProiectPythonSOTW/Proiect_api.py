@@ -1,5 +1,6 @@
-from fastapi import FastAPI,Query
-from starlette.responses import HTMLResponse
+from fastapi import FastAPI,Query,Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from Proiect import get_top_10
 import sqlite3
@@ -7,6 +8,18 @@ import sqlite3
 # Pentru rulare trebuie să vă aflați în directorul proiectului
 # și să rulați următoarea comandă (asigurați vă că aveți instalate toate librăriile necesare, uitați vă in requirements_proiect): uvicorn Proiect_api:app --reload
 app = FastAPI(title="Proiect API")
+
+@app.exception_handler(404)
+async def page_not_found(request: Request, exc):
+    return JSONResponse({"message": f"Endpoint-ul {request.url.path} nu există."}, status_code=404)
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error(request: Request, exc):
+    return JSONResponse({"message": f"Parametri invalizi pentru {request.url.path}","errors": exc.errors()})
+
+@app.exception_handler(Exception)
+async def unhandled_exception(request: Request, exc):
+    return JSONResponse({"message": str(exc)}, status_code=500)
 
 @app.get("/",response_class=HTMLResponse)
 def homepage():
@@ -20,7 +33,7 @@ def homepage():
     input {padding-top:10px; margin: 10px; width: 200px; }
     button {
     margin: 20px;
-    padding: 15px 30 px;
+    padding: 15px 30px;
     font-size : 16px;
     cursor: pointer;
     background-color: #4CAF50;
@@ -42,14 +55,18 @@ def homepage():
        <input type="text" name="government" placeholder="Government">
        <input type="text" name="neighbours" placeholder="Neighbour">
        <br>
-       <button type="submit">Search</button>    
+       <button type="submit">Search</button>
+    </form>    
     </body>
     </html>
     """
 # Endpoint pentru top-10-population.
 @app.get("/top-10-population")
 def top_10_population():
-    data = get_top_10("population")
+    try:
+        data = get_top_10("population")
+    except Exception as e:
+        return JSONResponse({"message": str(e), "errors": e.args})
     html = "<h2>Top 10 population</h2><table border='1'><tr><th>Country</th><th>Population</th></tr>"
     for d in data:
         html += f"<tr><td>{d['name']}</td><td>{d['population']:,}</td></tr>"
@@ -59,7 +76,10 @@ def top_10_population():
 # Endpoint pentru top-10-density.
 @app.get("/top-10-density")
 def top_10_density():
-    data = get_top_10("density")
+    try:
+        data = get_top_10("density")
+    except Exception as e:
+        return JSONResponse({"message": str(e), "errors": e.args})
     html = "<h2>Top 10 density</h2><table border='1'><tr><th>Country</th><th>Density</th></tr>"
     for d in data:
         html += f"<tr><td>{d['name']}</td><td>{d['density']:,}</td></tr>"
@@ -99,6 +119,8 @@ def get_countries(
                 if time_zone in timezones:
                     filtered_rows.append(row)
         rows = filtered_rows
+    if not rows:
+        return JSONResponse(status_code=404, content={"message": "No countries found"})
     html = "<h2>Countries</h2><table border='1'><tr>"
     headers = ["Country", "Capital", "Population", "Density", "Area", "Language", "Timezone", "Government", "Neighbours"]
     html += "".join(f"<th>{h}</th>" for h in headers)

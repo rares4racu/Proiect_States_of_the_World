@@ -17,6 +17,12 @@ def init_db():
             neighbours TEXT
         );
     """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS country_population ON countries (population);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS country_density ON countries (density);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS country_language ON countries (language);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS country_time_zone ON countries (time_zone);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS country_government ON countries (government);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS country_neighbours ON countries (neighbours);")
     conn.commit()
     return conn
 

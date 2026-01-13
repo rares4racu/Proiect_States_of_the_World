@@ -78,8 +78,8 @@ class TesterAPI(unittest.TestCase):
 
     def test_countries_no_result(self):
         response = self.client.get("/countries?language=French")
-        self.assertEqual(response.status_code, 500)
-        self.assertIn("No countries found", response.text)
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Invalid parameters", response.text)
 
     def test_homepage(self):
         response = self.client.get("/")
